@@ -7,17 +7,24 @@ const LANE_COUNT = 3;
 const LANE_H = 40;
 const LANE_GAP = 2;
 const ROAD_BOTTOM = 230;
-const SCROLL_SPEED = 1;
+const SCROLL_SPEED = 1.6;
 const GRAVITY = 0.18;
 const TOTAL_QUESTIONS = 10;
 const FLIP_SPEED = 0.2;
 const SPIN_SPEED = 0.15;
+const MAX_SPEED_MULTIPLIER = 1.3; // speed at final question vs first
 const WHEELIE_SPEED = 0.015;   // how fast wheelie tilts up
 const WHEELIE_MAX = 0.55;      // max safe wheelie angle (~31 deg)
 const WHEELIE_CRASH = 0.85;    // tip over backwards (crash)
 const LAND_PERFECT = 0.25;     // within this = perfect landing
 const LAND_OK = 0.8;           // within this = rough but ok
 // beyond LAND_OK = crash
+
+// Returns scroll speed for the current point in the level
+function getDynamicSpeed(questionIndex, totalQuestions, baseSpeed, maxMultiplier) {
+  const t = totalQuestions <= 1 ? 0 : questionIndex / (totalQuestions - 1);
+  return baseSpeed * (1 + (maxMultiplier - 1) * t);
+}
 
 function laneCenter(lane) {
   return ROAD_BOTTOM - lane * (LANE_H + LANE_GAP) - LANE_H / 2;
@@ -51,66 +58,130 @@ const PAL = {
 };
 
 // ─── MATH PROBLEM GENERATOR ───
+// questionIndex drives an early/mid/late difficulty ramp for every year.
+// Phase boundaries: 0-2 = early, 3-5 = mid, 6+ = late
 function genProblem(year, questionIndex = 0) {
   const r = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const phase = questionIndex < 3 ? "early" : questionIndex < 6 ? "mid" : "late";
   let q, answer;
-  // questionIndex used for year 3 difficulty ramping
+
   switch (year) {
-    case 1: { const a = r(1,9), b = r(1,9); q=`${a} + ${b}`; answer=a+b; break; }
-    case 2: {
-      if (Math.random()<0.5) { const a=r(1,15),b=r(1,Math.min(a,15)); q=`${a} - ${b}`; answer=a-b; }
-      else { const a=r(1,12),b=r(1,20-a); q=`${a} + ${b}`; answer=a+b; }
+
+    // ── Year 1: single-digit addition, numbers grow through the level ──
+    case 1: {
+      if (phase === "early") {
+        // Very small numbers, sums up to 8
+        const a=r(1,4), b=r(1,4); q=`${a} + ${b}`; answer=a+b;
+      } else if (phase === "mid") {
+        // Standard single digits, sums up to 12
+        const a=r(1,7), b=r(1,7); q=`${a} + ${b}`; answer=a+b;
+      } else {
+        // Full single digits, sums up to 18
+        const a=r(1,9), b=r(1,9); q=`${a} + ${b}`; answer=a+b;
+      }
       break;
     }
+
+    // ── Year 2: addition and subtraction within 20, range widens ──
+    case 2: {
+      if (phase === "early") {
+        // Addition/subtraction within 10
+        if (Math.random()<0.5) { const a=r(2,8),b=r(1,a); q=`${a} - ${b}`; answer=a-b; }
+        else { const a=r(1,6),b=r(1,10-a); q=`${a} + ${b}`; answer=a+b; }
+      } else if (phase === "mid") {
+        // Within 15
+        if (Math.random()<0.5) { const a=r(5,12),b=r(1,a); q=`${a} - ${b}`; answer=a-b; }
+        else { const a=r(3,10),b=r(1,15-a); q=`${a} + ${b}`; answer=a+b; }
+      } else {
+        // Full range within 20
+        if (Math.random()<0.5) { const a=r(5,15),b=r(1,Math.min(a,15)); q=`${a} - ${b}`; answer=a-b; }
+        else { const a=r(5,12),b=r(1,20-a); q=`${a} + ${b}`; answer=a+b; }
+      }
+      break;
+    }
+
+    // ── Year 3: tens addition, then double-digits, then times tables ──
     case 3: {
       const kind = Math.random();
-      if (questionIndex < 3) {
-        // First 3 questions: easy tens-based
+      if (phase === "early") {
+        // Tens-based or single-digit add/sub to a round number
         if (kind < 0.5) {
-          const a = r(1,9)*10, b = r(1,9)*10;
+          const a=r(1,9)*10, b=r(1,9)*10;
           if (Math.random()<0.5) { q=`${a} + ${b}`; answer=a+b; }
-          else { const big=Math.max(a,b), sm=Math.min(a,b); q=`${big} - ${sm}`; answer=big-sm; }
+          else { const big=Math.max(a,b),sm=Math.min(a,b); q=`${big} - ${sm}`; answer=big-sm; }
         } else {
-          const a = r(10,50), b = r(1,9); // add/sub single digit
+          const a=r(10,50), b=r(1,9);
           if (Math.random()<0.5) { q=`${a} + ${b}`; answer=a+b; }
           else { q=`${a} - ${b}`; answer=a-b; }
         }
-      } else if (questionIndex < 6) {
-        // Mid questions: moderate
-        if (kind < 0.5) {
-          const a=r(10,40),b=r(10,30); q=`${a} + ${b}`; answer=a+b;
-        } else if (kind < 0.8) {
-          const a=r(30,70),b=r(10,Math.min(a,30)); q=`${a} - ${b}`; answer=a-b;
-        } else {
-          const t=[2,5,10][r(0,2)],m=r(1,6); q=`${t} × ${m}`; answer=t*m;
-        }
+      } else if (phase === "mid") {
+        if (kind < 0.5) { const a=r(10,40),b=r(10,30); q=`${a} + ${b}`; answer=a+b; }
+        else if (kind < 0.8) { const a=r(30,70),b=r(10,Math.min(a,30)); q=`${a} - ${b}`; answer=a-b; }
+        else { const t=[2,5,10][r(0,2)],m=r(1,6); q=`${t} × ${m}`; answer=t*m; }
       } else {
-        // Later: harder
         if (kind < 0.33) { const a=r(20,60),b=r(10,99-a); q=`${a} + ${b}`; answer=a+b; }
         else if (kind < 0.66) { const a=r(30,99),b=r(10,a); q=`${a} - ${b}`; answer=a-b; }
         else { const t=[2,5,10][r(0,2)],m=r(1,10); q=`${t} × ${m}`; answer=t*m; }
       }
       break;
     }
+
+    // ── Year 4: times tables, then division introduced, then full mix ──
     case 4: {
-      if (Math.random()<0.6) { const a=r(2,12),b=r(2,12); q=`${a} × ${b}`; answer=a*b; }
-      else { const d=r(2,12),m=r(1,12),n=d*m; q=`${n} ÷ ${d}`; answer=m; }
+      if (phase === "early") {
+        // Easy tables only: 2×, 5×, 10×, small multipliers
+        const t=[2,5,10][r(0,2)], m=r(1,6); q=`${t} × ${m}`; answer=t*m;
+      } else if (phase === "mid") {
+        // Extend to 6×6 tables; introduce simple division by 2, 5, 10
+        if (Math.random()<0.6) { const a=r(2,6),b=r(2,6); q=`${a} × ${b}`; answer=a*b; }
+        else { const d=[2,5,10][r(0,2)],m=r(1,6),n=d*m; q=`${n} ÷ ${d}`; answer=m; }
+      } else {
+        // Full 12× tables and any divisor
+        if (Math.random()<0.6) { const a=r(2,12),b=r(2,12); q=`${a} × ${b}`; answer=a*b; }
+        else { const d=r(2,12),m=r(1,12),n=d*m; q=`${n} ÷ ${d}`; answer=m; }
+      }
       break;
     }
+
+    // ── Year 5: build from simple × to remainders to fractions ──
     case 5: {
-      const kind=Math.random();
-      if (kind<0.4) { const a=r(10,50),b=r(2,9); q=`${a} × ${b}`; answer=a*b; }
-      else if (kind<0.7) { const d=r(3,12),m=r(5,15),rem=r(1,d-1),n=d*m+rem; q=`${n} ÷ ${d} remainder?`; answer=rem; }
-      else { const num=r(1,4),den=[2,4,5][r(0,2)],whole=r(1,5); q=`${num}/${den} + ${whole}`; answer=parseFloat((num/den+whole).toFixed(2)); }
+      if (phase === "early") {
+        // Small multi-digit multiplication (×2 to ×4)
+        const a=r(10,30), b=r(2,4); q=`${a} × ${b}`; answer=a*b;
+      } else if (phase === "mid") {
+        // Larger × and simple division with remainders (small divisors)
+        if (Math.random()<0.5) { const a=r(15,50),b=r(2,6); q=`${a} × ${b}`; answer=a*b; }
+        else { const d=r(2,6),m=r(3,8),rem=r(1,d-1),n=d*m+rem; q=`${n} ÷ ${d} remainder?`; answer=rem; }
+      } else {
+        // Full range: larger ×, bigger remainders, fractions
+        const kind=Math.random();
+        if (kind<0.4) { const a=r(20,50),b=r(2,9); q=`${a} × ${b}`; answer=a*b; }
+        else if (kind<0.7) { const d=r(3,12),m=r(5,15),rem=r(1,d-1),n=d*m+rem; q=`${n} ÷ ${d} remainder?`; answer=rem; }
+        else { const num=r(1,4),den=[2,4,5][r(0,2)],whole=r(1,5); q=`${num}/${den} + ${whole}`; answer=parseFloat((num/den+whole).toFixed(2)); }
+      }
       break;
     }
+
+    // ── Year 6: easy % and ×+c, then mixed, then full order-of-ops ──
     case 6: {
-      const kind=Math.random();
-      if (kind<0.33) { const a=r(2,10),b=r(1,10),c=r(1,10); q=`${a} × ${b} + ${c}`; answer=a*b+c; }
-      else if (kind<0.66) { const pct=[10,20,25,50][r(0,3)],of_=[40,60,80,100,200][r(0,4)]; q=`${pct}% of ${of_}`; answer=(pct/100)*of_; }
-      else { const a=r(5,20),b=r(2,8),c=r(1,5); q=`${a} - ${b} × ${c}`; answer=a-b*c; }
+      if (phase === "early") {
+        // Simple: 50% or 10% of round numbers; small ×+c
+        if (Math.random()<0.5) { const pct=[10,50][r(0,1)],of_=[20,40,60,80,100][r(0,4)]; q=`${pct}% of ${of_}`; answer=(pct/100)*of_; }
+        else { const a=r(2,5),b=r(2,5),c=r(1,5); q=`${a} × ${b} + ${c}`; answer=a*b+c; }
+      } else if (phase === "mid") {
+        // Extend % to 25%; subtraction × with small numbers
+        if (Math.random()<0.5) { const pct=[10,20,25][r(0,2)],of_=[40,60,80,100,200][r(0,4)]; q=`${pct}% of ${of_}`; answer=(pct/100)*of_; }
+        else { const a=r(3,8),b=r(2,5),c=r(1,8); q=`${a} × ${b} + ${c}`; answer=a*b+c; }
+      } else {
+        // Full range: all %, order-of-ops subtraction
+        const kind=Math.random();
+        if (kind<0.33) { const a=r(2,10),b=r(1,10),c=r(1,10); q=`${a} × ${b} + ${c}`; answer=a*b+c; }
+        else if (kind<0.66) { const pct=[10,20,25,50][r(0,3)],of_=[40,60,80,100,200][r(0,4)]; q=`${pct}% of ${of_}`; answer=(pct/100)*of_; }
+        else { const a=r(5,20),b=r(2,8),c=r(1,5); q=`${a} - ${b} × ${c}`; answer=a-b*c; }
+      }
       break;
     }
+
     default: { const a=r(1,5),b=r(1,5); q=`${a} + ${b}`; answer=a+b; }
   }
   return { question: q, answer, options: genOptions(answer) };
@@ -295,13 +366,13 @@ export default function ExciteMathBike() {
   const containerRef = useRef(null);
   const gameState = useRef(null);
   const keysRef = useRef({});
-  const touchRef = useRef({ up:false, down:false, left:false, right:false, wheelie:false });
+  const touchRef = useRef({ up:false, down:false, left:false, right:false });
   const soundRef = useRef(new SoundEngine());
   const animRef = useRef(null);
   const engineTimerRef = useRef(0);
   const [screen, setScreen] = useState("title"); // title | playing | paused | win | gameover
   const [year, setYear] = useState(null);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(1); // canvas CSS scale factor
 
   useEffect(() => {
     function handleResize() {
@@ -342,6 +413,7 @@ export default function ExciteMathBike() {
     setYear(selectedYear);
     const problem = genProblem(selectedYear, 0);
     gameState.current = {
+      currentSpeed: getDynamicSpeed(0, TOTAL_QUESTIONS, SCROLL_SPEED, MAX_SPEED_MULTIPLIER),
       bikeX: 80, bikeY: laneCenter(1), lane: 1, targetLane: 1,
       vy: 0, airborne: false, rotation: 0,
       wheelieAngle: 0, doingWheelie: false,
@@ -392,11 +464,11 @@ export default function ExciteMathBike() {
           gs.crashed = false; gs.invincible = 90; gs.rotation = 0; gs.wheelieAngle = 0;
           gs.bikeY = laneCenter(gs.lane); gs.vy = 0; gs.airborne = false;
         }
-        gs.scrollX += SCROLL_SPEED * 0.3;
+        gs.scrollX += gs.currentSpeed * 0.3;
         return;
       }
 
-      gs.scrollX += SCROLL_SPEED;
+      gs.scrollX += gs.currentSpeed;
       engineTimerRef.current++;
       if (engineTimerRef.current % 14 === 0) soundRef.current.play("engine");
 
@@ -406,7 +478,7 @@ export default function ExciteMathBike() {
 
       // ── Wheelie mechanic (grounded only, not during a jump) ──
       if (!gs.airborne) {
-        const wantWheelie = keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.wheelie;
+        const wantWheelie = keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.left;
         if (wantWheelie) {
           gs.doingWheelie = true;
           gs.wheelieAngle = Math.min(gs.wheelieAngle + WHEELIE_SPEED, WHEELIE_CRASH + 0.05);
@@ -469,7 +541,7 @@ export default function ExciteMathBike() {
             gs.particles.emit(gs.bikeX, gs.bikeY, 5, PAL.star, 1.5);
           }
         }
-        if (keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.left || touch.wheelie) {
+        if (keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.left) {
           gs.rotation -= SPIN_SPEED;
           if (gs.spinCount < 3 && Math.abs(gs.rotation) > Math.PI*0.5*(gs.spinCount+1)) {
             gs.spinCount++; gs.trickPoints += 75*gs.combo;
@@ -590,11 +662,12 @@ export default function ExciteMathBike() {
               gs.particles.emit(gs.bikeX,gs.bikeY+6,4,PAL.dust,1);
               soundRef.current.play("land");
             } else if (gs.doingWheelie && gs.wheelieAngle > 0.1) {
-              // Wheelie over obstacle! Just ride through, no flip
-              gs.particles.emit(gs.bikeX,gs.bikeY+6,4,PAL.dust,0.8);
-              gs.trickDisplay = "WHEELIE!"; gs.trickDisplayTimer = 25;
-              soundRef.current.play("wheelie");
-              gs.score += 15;
+              // Wheelie-hop over obstacle — same small hop as a bump
+              gs.airborne=true; gs.vy=-3.5; gs.wheelieAngle=0;
+              gs.particles.emit(gs.bikeX,gs.bikeY+6,4,PAL.dust,1);
+              soundRef.current.play("land");
+              gs.trickDisplay = "WHEELIE! +10"; gs.trickDisplayTimer = 30;
+              gs.score += 10;
             } else {
               gs.particles.emit(gs.bikeX,gs.bikeY,6,PAL.explosion,1);
               gs.score = Math.max(0, gs.score-10);
@@ -623,6 +696,7 @@ export default function ExciteMathBike() {
         if (gs.questionDelay === 0) {
           const problem = genProblem(gs.year, gs.questionsAnswered);
           gs.currentProblem = problem;
+          gs.currentSpeed = getDynamicSpeed(gs.questionsAnswered, TOTAL_QUESTIONS, SCROLL_SPEED, MAX_SPEED_MULTIPLIER);
           const questionWorldX = gs.scrollX + GAME_W + 180;
           gs.answerSigns = createAnswerSigns(problem, questionWorldX);
           gs.answeredThisRound=false; gs.jumpRamp=null; gs.waitingForJump=false; gs.lastQuestion=false;
@@ -768,7 +842,7 @@ export default function ExciteMathBike() {
         <div className="text-center p-4" style={{ maxWidth:480 }}>
           <h1 className="text-3xl md:text-5xl font-bold mb-2" style={{ color:PAL.star, textShadow:"3px 3px 0 #a03000" }}>MOTOMATH!</h1>
           <p className="text-sm md:text-base mb-1" style={{ color:PAL.skyLight }}>Answer questions → Hit the jump → Do tricks!</p>
-          <p className="text-xs mb-5" style={{ color:PAL.riderDark }}>Hold ← to wheelie over obstacles. Press Esc to pause.</p>
+          <p className="text-xs mb-5" style={{ color:PAL.riderDark }}>Hold ◄ to wheelie over obstacles · speed builds as you go!</p>
           <p className="text-xs mb-3 font-bold" style={{ color:PAL.text }}>CHOOSE YOUR YEAR</p>
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[1,2,3,4,5,6].map(y=>(
@@ -779,7 +853,7 @@ export default function ExciteMathBike() {
             ))}
           </div>
           <div className="text-xs" style={{ color:PAL.riderDark }}>
-            <p>Desktop: ↑↓ lanes/flips · → spin · ← wheelie · Esc pause</p>
+            <p>Desktop: ↑↓ lanes &amp; flips · → spin · ← wheelie/spin · Esc pause</p>
             <p>Mobile: On-screen buttons below the game</p>
           </div>
         </div>
@@ -869,17 +943,7 @@ export default function ExciteMathBike() {
             className="font-bold rounded-lg active:scale-90 transition-transform"
             style={{ background:PAL.ramp, color:"#222", border:"3px solid #c87800", width:60, height:44, fontSize:20 }}>▼</button>
         </div>
-        {/* Center - wheelie */}
-        <div className="flex flex-col items-center justify-center gap-1">
-          <button onTouchStart={e=>{e.preventDefault();handleTouch("wheelie",true)}} onTouchEnd={e=>{e.preventDefault();handleTouch("wheelie",false)}}
-            onMouseDown={()=>handleTouch("wheelie",true)} onMouseUp={()=>handleTouch("wheelie",false)}
-            className="font-bold rounded-lg active:scale-90 transition-transform"
-            style={{ background:"#c040a0", color:PAL.text, border:"3px solid #903070", width:70, height:40, fontSize:11, fontFamily:"monospace" }}>
-            WHEELIE
-          </button>
-          <span style={{ color:PAL.riderDark, fontFamily:"monospace", fontSize:9 }}>hold to wheelie</span>
-        </div>
-        {/* Right - spins */}
+        {/* Right - spins/wheelie */}
         <div className="flex gap-1 items-center">
           <button onTouchStart={e=>{e.preventDefault();handleTouch("left",true)}} onTouchEnd={e=>{e.preventDefault();handleTouch("left",false)}}
             onMouseDown={()=>handleTouch("left",true)} onMouseUp={()=>handleTouch("left",false)}
