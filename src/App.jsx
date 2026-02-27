@@ -1,4 +1,4 @@
-import Game from "./Game.jsx";
+import Game from "./game.jsx";
 
 export default function App() {
   return (
