@@ -367,6 +367,7 @@ export default function ExciteMathBike() {
   const gameState = useRef(null);
   const keysRef = useRef({});
   const touchRef = useRef({ up:false, down:false, left:false, right:false });
+  const canvasTouchRef = useRef({ left:false, right:false });
   const soundRef = useRef(new SoundEngine());
   const animRef = useRef(null);
   const engineTimerRef = useRef(0);
@@ -411,7 +412,7 @@ export default function ExciteMathBike() {
     soundRef.current.init();
     soundRef.current.play("select");
     setYear(selectedYear);
-    const problem = genProblem(selectedYear, 0);
+    canvasTouchRef.current = { left: false, right: false };
     gameState.current = {
       currentSpeed: getDynamicSpeed(0, TOTAL_QUESTIONS, SCROLL_SPEED, MAX_SPEED_MULTIPLIER),
       bikeX: 80, bikeY: laneCenter(1), lane: 1, targetLane: 1,
@@ -422,12 +423,13 @@ export default function ExciteMathBike() {
       scrollX: 0, particles: new Particles(),
       score: 0, lives: 3, combo: 1,
       questionsAnswered: 0, year: selectedYear,
-      currentProblem: problem,
-      answerSigns: createAnswerSigns(problem, 400),
-      answeredThisRound: false, questionDelay: 0,
+      currentProblem: null,
+      answerSigns: [],
+      // answeredThisRound=true + questionDelay gives the player ~2s to orient before Q1
+      answeredThisRound: true, questionDelay: 120,
       jumpRamp: null, waitingForJump: false, lastQuestion: false,
       obstacles: [],
-      dustTimer: 0, trickDisplay: "", trickDisplayTimer: 0,
+      dustTimer: 0, trickDisplay: "READY!", trickDisplayTimer: 80,
     };
     setScreen("playing");
   }, []);
@@ -478,7 +480,7 @@ export default function ExciteMathBike() {
 
       // ── Wheelie mechanic (grounded only, not during a jump) ──
       if (!gs.airborne) {
-        const wantWheelie = keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.left;
+        const wantWheelie = keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.left || canvasTouchRef.current.left;
         if (wantWheelie) {
           gs.doingWheelie = true;
           gs.wheelieAngle = Math.min(gs.wheelieAngle + WHEELIE_SPEED, WHEELIE_CRASH + 0.05);
@@ -541,16 +543,23 @@ export default function ExciteMathBike() {
             gs.particles.emit(gs.bikeX, gs.bikeY, 5, PAL.star, 1.5);
           }
         }
-        if (keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.left) {
+        if (keys["ArrowLeft"] || keys["a"] || keys["A"] || touch.left || canvasTouchRef.current.left) {
           gs.rotation -= SPIN_SPEED;
+          // Award points at each quarter-turn (by absolute rotation)
           if (gs.spinCount < 3 && Math.abs(gs.rotation) > Math.PI*0.5*(gs.spinCount+1)) {
             gs.spinCount++; gs.trickPoints += 75*gs.combo;
             gs.trickDisplay = `SPIN x${gs.spinCount}! +${75*gs.combo}`;
             gs.trickDisplayTimer = 40; soundRef.current.play("trick");
           }
         }
-        if (keys["ArrowRight"] || keys["d"] || keys["D"] || touch.right) {
+        if (keys["ArrowRight"] || keys["d"] || keys["D"] || touch.right || canvasTouchRef.current.right) {
           gs.rotation += SPIN_SPEED;
+          // Right spin also earns trick points (positive rotation threshold)
+          if (gs.spinCount < 3 && gs.rotation > Math.PI*0.5*(gs.spinCount+1)) {
+            gs.spinCount++; gs.trickPoints += 75*gs.combo;
+            gs.trickDisplay = `SPIN x${gs.spinCount}! +${75*gs.combo}`;
+            gs.trickDisplayTimer = 40; soundRef.current.play("trick");
+          }
         }
 
         // Landing
@@ -824,7 +833,7 @@ export default function ExciteMathBike() {
       drawText(ctx,`YEAR ${gs.year}`,52,GAME_H-1,8,PAL.riderDark);
 
       // Controls hint
-      if (gs.airborne) drawText(ctx,"↑↓ FLIP  ←→ SPIN",GAME_W/2,GAME_H-1,7,"#88a8ff");
+      if (gs.airborne) drawText(ctx,"↑↓ FLIP  ←→ SPIN  (or tap left/right of rider)",GAME_W/2,GAME_H-1,7,"#88a8ff");
     }
 
     animRef.current = requestAnimationFrame(loop);
@@ -832,6 +841,48 @@ export default function ExciteMathBike() {
   }, [screen]);
 
   const handleTouch = (dir, isDown) => { touchRef.current[dir] = isDown; };
+
+  // Canvas click/tap: lane switching by tapping the lane strip,
+  // wheelie/spin by tapping left or right of the rider.
+  function handleCanvasDown(e) {
+    e.preventDefault();
+    const gs = gameState.current;
+    if (!gs) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    const cx = (src.clientX - rect.left) / scale;
+    const cy = (src.clientY - rect.top)  / scale;
+
+    // ── Lane switch: tap anywhere in a different lane row ──
+    const roadTop = laneTop(LANE_COUNT - 1);
+    if (cy >= roadTop && cy <= ROAD_BOTTOM + 4) {
+      for (let lane = 0; lane < LANE_COUNT; lane++) {
+        const lt = laneTop(lane);
+        if (cy >= lt && cy < lt + LANE_H) {
+          if (lane !== gs.targetLane) {
+            gs.targetLane = lane;
+            soundRef.current.play("select");
+          }
+          break;
+        }
+      }
+    }
+
+    // ── Left/right of rider → wheelie (grounded) or spin (airborne) ──
+    if (cx < gs.bikeX) {
+      canvasTouchRef.current.left = true;
+    } else {
+      canvasTouchRef.current.right = true;
+    }
+  }
+
+  function handleCanvasUp(e) {
+    e.preventDefault();
+    canvasTouchRef.current.left  = false;
+    canvasTouchRef.current.right = false;
+  }
 
   const canvasStyle = { width: GAME_W*scale, height: GAME_H*scale, imageRendering: "pixelated" };
 
@@ -853,8 +904,8 @@ export default function ExciteMathBike() {
             ))}
           </div>
           <div className="text-xs" style={{ color:PAL.riderDark }}>
-            <p>Desktop: ↑↓ lanes &amp; flips · → spin · ← wheelie/spin · Esc pause</p>
-            <p>Mobile: On-screen buttons below the game</p>
+            <p>Keys: ↑↓ change lanes &amp; flip · ← wheelie/spin · → spin · Esc pause</p>
+            <p>Mouse/touch: tap a lane to switch · tap left/right of rider to wheelie or spin</p>
           </div>
         </div>
       </div>
@@ -929,7 +980,10 @@ export default function ExciteMathBike() {
           ⏸ PAUSE
         </button>
       </div>
-      <canvas ref={canvasRef} width={GAME_W} height={GAME_H} style={canvasStyle} className="block" />
+      <canvas ref={canvasRef} width={GAME_W} height={GAME_H} style={canvasStyle} className="block"
+        onMouseDown={handleCanvasDown} onMouseUp={handleCanvasUp} onMouseLeave={handleCanvasUp}
+        onTouchStart={handleCanvasDown} onTouchEnd={handleCanvasUp} onTouchCancel={handleCanvasUp}
+      />
       {/* Mobile controls */}
       <div className="flex justify-between w-full px-3 mt-2" style={{ maxWidth: GAME_W*scale }}>
         {/* Left - lanes */}
