@@ -401,6 +401,20 @@ export default function ExciteMathBike() {
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   }, []);
 
+  // Global mouseup: clears all button/canvas touch states if mouse is released outside a button element
+  useEffect(() => {
+    const clearAll = () => {
+      touchRef.current.up    = false;
+      touchRef.current.down  = false;
+      touchRef.current.left  = false;
+      touchRef.current.right = false;
+      canvasTouchRef.current.left  = false;
+      canvasTouchRef.current.right = false;
+    };
+    window.addEventListener("mouseup", clearAll);
+    return () => window.removeEventListener("mouseup", clearAll);
+  }, []);
+
   function createAnswerSigns(problem, worldX) {
     return problem.options.map((opt, i) => ({
       worldX, lane: i, value: opt, correct: opt === problem.answer,
