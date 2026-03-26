@@ -361,7 +361,7 @@ class Particles {
 }
 
 // ─── MAIN COMPONENT ───
-export default function ExciteMathBike({ onNavigate} ) {
+export default function ExciteMathBike({ onNavigate }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const gameState = useRef(null);
@@ -374,6 +374,7 @@ export default function ExciteMathBike({ onNavigate} ) {
   const [screen, setScreen] = useState("title"); // title | playing | paused | win | gameover
   const [year, setYear] = useState(null);
   const [scale, setScale] = useState(1); // canvas CSS scale factor
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     function handleResize() {
@@ -904,12 +905,27 @@ export default function ExciteMathBike({ onNavigate} ) {
   if (screen === "title") {
     return (
       <div ref={containerRef} className="flex flex-col items-center justify-center min-h-screen w-full" style={{ background:"#1a1a2e", fontFamily:"monospace" }}>
-        <div className="text-center p-4" style={{ maxWidth:480 }}>
-          <h1 className="text-3xl md:text-5xl font-bold mb-2" style={{ color:PAL.star, textShadow:"3px 3px 0 #a03000" }}>MOTOMATH!</h1>
-          <p className="text-sm md:text-base mb-1" style={{ color:PAL.skyLight }}>Answer questions → Hit the jump → Do tricks!</p>
-          <p className="text-xs mb-5" style={{ color:PAL.riderDark }}>Hold ◄ to wheelie over obstacles · speed builds as you go!</p>
-          <p className="text-xs mb-3 font-bold" style={{ color:PAL.text }}>CHOOSE YOUR YEAR</p>
-          <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="text-center p-4" style={{ maxWidth:420, width:"100%" }}>
+
+          {/* Title + help icon */}
+          <div style={{ position:"relative", display:"inline-block", width:"100%" }}>
+            <h1 className="text-3xl md:text-5xl font-bold mb-8" style={{ color:PAL.star, textShadow:"3px 3px 0 #a03000" }}>MOTOMATH!</h1>
+            <button
+              onClick={() => setShowHelp(true)}
+              title="How to play"
+              style={{
+                position:"absolute", top:0, right:0,
+                width:32, height:32, borderRadius:"50%",
+                background:"transparent", border:"2px solid #444",
+                color:"#888", fontSize:15, fontWeight:"bold",
+                cursor:"pointer", lineHeight:"28px",
+                fontFamily:"Georgia, serif",
+              }}
+            >?</button>
+          </div>
+
+          {/* Year buttons */}
+          <div className="grid grid-cols-3 gap-3 mb-8">
             {[1,2,3,4,5,6].map(y=>(
               <button key={y} onClick={()=>startGame(y)} className="font-bold py-3 px-4 rounded-lg text-lg md:text-xl transition-transform active:scale-95"
                 style={{ background:PAL.ramp, color:"#222", border:"3px solid #c87800", minHeight:56 }}>
@@ -917,24 +933,75 @@ export default function ExciteMathBike({ onNavigate} ) {
               </button>
             ))}
           </div>
-          <div className="text-xs" style={{ color:PAL.riderDark }}>
-            <p>Keys: ↑↓ change lanes &amp; flip · ← wheelie/spin · → spin · Esc pause</p>
-            <p>Mouse/touch: tap a lane to switch · tap left/right of rider to wheelie or spin</p>
-          </div>
-{onNavigate && (
-  <div className="mt-8 pt-5" style={{ borderTop:"1px solid #2a2a4a" }}>
-    <p className="text-xs mb-2" style={{ color:"#666" }}>LOOKING FOR SOMETHING DIFFERENT?</p>
-    <button
-      onClick={() => onNavigate("truzzle")}
-      className="font-bold py-2 px-5 rounded-lg text-sm transition-transform active:scale-95"
-      style={{ background:"transparent", color:"#e94560", border:"2px solid #e94560", fontFamily:"monospace", letterSpacing:1 }}
-    >
-      🧩 Try Truzzle →
-    </button>
-    <p className="text-xs mt-2" style={{ color:"#555" }}>8-bit piece puzzle · fit every block!</p>
-  </div>
-)}
+
+          {/* Cross-promo */}
+          {onNavigate && (
+            <div className="pt-5" style={{ borderTop:"1px solid #2a2a4a" }}>
+              <p className="text-xs mb-2" style={{ color:"#555" }}>LOOKING FOR SOMETHING DIFFERENT?</p>
+              <button
+                onClick={() => onNavigate("truzzle")}
+                className="font-bold py-2 px-5 rounded-lg text-sm transition-transform active:scale-95"
+                style={{ background:"transparent", color:"#e94560", border:"2px solid #e94560", fontFamily:"monospace", letterSpacing:1 }}
+              >
+                🧩 Try Truzzle →
+              </button>
+              <p className="text-xs mt-2" style={{ color:"#444" }}>8-bit piece puzzle · fit every block!</p>
+            </div>
+          )}
         </div>
+
+        {/* Help modal */}
+        {showHelp && (
+          <div
+            onClick={() => setShowHelp(false)}
+            style={{
+              position:"fixed", inset:0, background:"rgba(0,0,0,0.75)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              zIndex:1000, padding:16,
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background:"#16213e", border:"2px solid #444", borderRadius:12,
+                padding:"24px 28px", maxWidth:420, width:"100%",
+                color:"#ddd", fontFamily:"monospace", fontSize:13, lineHeight:1.8,
+              }}
+            >
+              <h2 style={{ color:PAL.star, fontSize:16, marginBottom:16, textAlign:"center", textShadow:"2px 2px 0 #a03000" }}>HOW TO PLAY</h2>
+              <p style={{ marginBottom:12, color:"#aaa", fontSize:12 }}>Answer the maths question, hit the jump ramp, then do tricks in the air!</p>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                <tbody>
+                  {[
+                    ["↑ / ↓",        "Change lane (or flip in air)"],
+                    ["← (hold)",      "Wheelie on ground / spin in air"],
+                    ["→ (hold)",      "Spin in air"],
+                    ["Esc",           "Pause"],
+                    ["Tap a lane",    "Switch to that lane"],
+                    ["Tap left of rider",  "Wheelie / spin left"],
+                    ["Tap right of rider", "Spin right"],
+                  ].map(([key, desc]) => (
+                    <tr key={key} style={{ borderBottom:"1px solid #2a2a4a" }}>
+                      <td style={{ padding:"6px 10px 6px 0", color:PAL.ramp, whiteSpace:"nowrap", fontWeight:"bold" }}>{key}</td>
+                      <td style={{ padding:"6px 0" }}>{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ marginTop:14, fontSize:11, color:"#666", textAlign:"center" }}>Speed increases as you progress · land tricks perfectly for bonus points!</p>
+              <div style={{ textAlign:"center", marginTop:20 }}>
+                <button
+                  onClick={() => setShowHelp(false)}
+                  style={{
+                    background:PAL.ramp, color:"#222", border:"none",
+                    borderRadius:8, padding:"10px 32px", fontWeight:"bold",
+                    fontSize:14, cursor:"pointer", fontFamily:"monospace",
+                  }}
+                >GOT IT</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
