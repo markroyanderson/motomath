@@ -375,6 +375,21 @@ export default function ExciteMathBike({ onNavigate }) {
   const [year, setYear] = useState(null);
   const [scale, setScale] = useState(1); // canvas CSS scale factor
   const [showHelp, setShowHelp] = useState(false);
+  const [showCopied, setShowCopied] = useState(false);
+
+  function handleShare() {
+    const url = window.location.origin + window.location.pathname;
+    const title = "MotoMath!";
+    const text = "Answer maths questions, hit the ramp and do tricks! 🏍️";
+    if (navigator.share) {
+      navigator.share({ title, text, url }).catch(()=>{});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        setShowCopied(true);
+        setTimeout(() => setShowCopied(false), 2000);
+      }).catch(()=>{});
+    }
+  }
 
   useEffect(() => {
     function handleResize() {
@@ -932,6 +947,39 @@ export default function ExciteMathBike({ onNavigate }) {
                 Year {y}
               </button>
             ))}
+          </div>
+
+          {/* Share */}
+          <div className="mb-8" style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+            <button
+              onClick={handleShare}
+              className="transition-transform active:scale-95"
+              style={{
+                background:"transparent", border:"2px solid #3a5a3a",
+                color: showCopied ? "#50fa7b" : "#7ab87a",
+                borderColor: showCopied ? "#50fa7b" : "#3a5a3a",
+                borderRadius:8, padding:"9px 18px",
+                fontFamily:"monospace", fontSize:12, fontWeight:"bold",
+                cursor:"pointer", letterSpacing:1,
+              }}
+            >
+              {showCopied ? "✓ Link copied!" : "📤 Share"}
+            </button>
+            <button
+              onClick={() => {
+                const url = encodeURIComponent(window.location.origin + window.location.pathname);
+                window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "fb-share", "width=600,height=400,resizable=yes");
+              }}
+              className="transition-transform active:scale-95"
+              style={{
+                background:"transparent", border:"2px solid #1877F2",
+                color:"#1877F2", borderRadius:8, padding:"9px 18px",
+                fontFamily:"monospace", fontSize:12, fontWeight:"bold",
+                cursor:"pointer", letterSpacing:1,
+              }}
+            >
+              f Share on Facebook
+            </button>
           </div>
 
           {/* Cross-promo */}
