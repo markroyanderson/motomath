@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Game        from "./game.jsx";
-import TruzzleGame from "./Truzzle.jsx";
+import TruzzleGame from "./truzzle.jsx";
 
 function getPageFromHash() {
   return window.location.hash === "#truzzle" ? "truzzle" : "motomath";
