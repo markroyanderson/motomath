@@ -361,7 +361,7 @@ class Particles {
 }
 
 // ─── MAIN COMPONENT ───
-export default function ExciteMathBike() {
+export default function ExciteMathBike({ onNavigate} ) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const gameState = useRef(null);
@@ -921,6 +921,19 @@ export default function ExciteMathBike() {
             <p>Keys: ↑↓ change lanes &amp; flip · ← wheelie/spin · → spin · Esc pause</p>
             <p>Mouse/touch: tap a lane to switch · tap left/right of rider to wheelie or spin</p>
           </div>
+{onNavigate && (
+  <div className="mt-8 pt-5" style={{ borderTop:"1px solid #2a2a4a" }}>
+    <p className="text-xs mb-2" style={{ color:"#666" }}>LOOKING FOR SOMETHING DIFFERENT?</p>
+    <button
+      onClick={() => onNavigate("truzzle")}
+      className="font-bold py-2 px-5 rounded-lg text-sm transition-transform active:scale-95"
+      style={{ background:"transparent", color:"#e94560", border:"2px solid #e94560", fontFamily:"monospace", letterSpacing:1 }}
+    >
+      🧩 Try Truzzle →
+    </button>
+    <p className="text-xs mt-2" style={{ color:"#555" }}>8-bit piece puzzle · fit every block!</p>
+  </div>
+)}
         </div>
       </div>
     );
