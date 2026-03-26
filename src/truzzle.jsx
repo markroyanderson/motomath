@@ -153,6 +153,21 @@ export default function TruzzleGame({ onBack }) {
   const [showVictory,  setShowVictory]   = useState(false);
   const [victoryTime,  setVictoryTime]   = useState('');
   const [solvedSet,    setSolvedSet]     = useState(() => new Set());
+  const [showCopied,   setShowCopied]    = useState(false);
+
+  function handleShare() {
+    const url = window.location.origin + window.location.pathname + "#truzzle";
+    const title = "Truzzle — 8-Bit Puzzle Edition";
+    const text = "Can you fit all the pieces? 🧩 Try this 8-bit puzzle game!";
+    if (navigator.share) {
+      navigator.share({ title, text, url }).catch(()=>{});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        setShowCopied(true);
+        setTimeout(() => setShowCopied(false), 2000);
+      }).catch(()=>{});
+    }
+  }
 
   const redraw = useCallback(() => setTick(t => t+1), []);
 
@@ -660,6 +675,45 @@ export default function TruzzleGame({ onBack }) {
               </div>
             );
           })}
+        </div>
+
+        {/* Share */}
+        <div style={{ marginBottom: 16, display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
+          <button
+            className="tz-btn"
+            onClick={handleShare}
+            style={{
+              fontFamily:"'Press Start 2P', monospace",
+              fontSize: 8,
+              padding: '9px 14px',
+              border: showCopied ? '2px solid #50fa7b' : '2px solid #3a6a3a',
+              background: 'transparent',
+              color: showCopied ? '#50fa7b' : '#7ab87a',
+              cursor: 'pointer',
+              letterSpacing: 1,
+            }}
+          >
+            {showCopied ? '✓ COPIED!' : '📤 SHARE'}
+          </button>
+          <button
+            className="tz-btn"
+            onClick={() => {
+              const url = encodeURIComponent(window.location.origin + window.location.pathname + "#truzzle");
+              window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "fb-share", "width=600,height=400,resizable=yes");
+            }}
+            style={{
+              fontFamily:"'Press Start 2P', monospace",
+              fontSize: 8,
+              padding: '9px 14px',
+              border: '2px solid #1877F2',
+              background: 'transparent',
+              color: '#1877F2',
+              cursor: 'pointer',
+              letterSpacing: 1,
+            }}
+          >
+            f FACEBOOK
+          </button>
         </div>
 
         {/* Victory overlay */}
